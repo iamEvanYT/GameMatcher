@@ -11,11 +11,11 @@
     "@types/bun": "latest"
   },
   "peerDependencies": {
-    "typescript": "^5.0.0"
+    "typescript": "^5.6.3"
   },
   "dependencies": {
-    "@hono/node-server": "^1.13.2",
-    "hono": "^4.6.7",
+    "@hono/node-server": "^1.13.5",
+    "hono": "^4.6.9",
     "mongodb": "^6.10.0",
     "zlib": "^1.0.5",
     "zod": "^3.23.8"
