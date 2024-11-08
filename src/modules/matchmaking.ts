@@ -74,6 +74,8 @@ async function createMatch(queueData: QueueConfig, teams: number[][], partiesUse
             createdAt: currentDate
         }))
     ).catch(emptyHandler);
+    
+    console.log("found match", queueId)
 
     return {
         success: true,
