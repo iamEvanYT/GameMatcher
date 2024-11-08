@@ -17,9 +17,8 @@ export const foundPartiesCollectionName = 'foundParties'
 
 // Queues
 export const queues: QueueConfigs = [
-    /*
     {
-        queueId: "Ranked2v2",
+        queueId: "RankedPVP",
         queueType: "ranked",
 
         usersPerTeam: 2,
@@ -30,12 +29,9 @@ export const queues: QueueConfigs = [
         searchRange: [0, 0],
         incrementRange: [1, 1],
     }
-    */
 ] as const;
 export const validQueueIds = [
-    /*
-    "Ranked2v2"
-    */
+    "RankedPVP"
 ] as const
 
 // Database Configurations
