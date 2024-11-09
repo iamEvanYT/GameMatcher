@@ -5,7 +5,6 @@ import { queues } from "../config.js";
 import { foundMatchesCollection, foundPartiesCollection, queuesCollection, serverIdsCollection } from "../database.js";
 import { emptyHandler } from "../empty-handler.js";
 import { findRankedMatch } from "./algorithms/ranked.js";
-import { findNormalMatch } from "./algorithms/normal.js";
 
 export async function getPartyMatch(partyId: string): Promise<WithId<FoundMatchDocument> | null> {
     const matchId: ObjectId | null = await foundPartiesCollection.findOne({ _id: partyId }).then(foundParty => {
@@ -96,7 +95,7 @@ export async function discoverMatches(queueId: string) {
 
     switch (queueType) {
         case "normal":
-            await findNormalMatch(queueData);
+            // TODO
             break
         case "dynamic":
             // TODO
