@@ -36,4 +36,5 @@ export const validQueueIds = [
 
 // Database Configurations
 export const QUEUE_EXPIRE_AFTER = (60 * 60 * 2) // 2 hours in seconds
-export const SERVER_EXPIRE_AFTER = (60 * 60 * 12) // 12 hours in seconds
+export const SERVER_EXPIRE_AFTER = (60 * 60 * 2) // 2 hours in seconds
+export const MATCHES_EXPIRE_AFTER = (10 * 60) // 10 minutes in seconds
