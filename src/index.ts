@@ -42,7 +42,7 @@ import { errorHandler } from 'middlewares/error-handler.js';
 import fs from "fs";
 import path from "path";
 import { client } from 'modules/database.js';
-import { initMatchmaking } from 'modules/matchmaking.js';
+import { initMatchmaking } from 'modules/matchmaking/matchmaking.js';
 
 // Initialize Hono app
 const app = new Hono()

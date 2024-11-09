@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { type ContextWithParsedBody, parseJSONBody } from "middlewares/body-parser.js";
 import { authMiddleware } from "modules/authorization.js";
 import { queuesCollection } from "modules/database.js";
-import { getPartyMatch } from "modules/matchmaking.js";
+import { getPartyMatch } from "modules/matchmaking/matchmaking.js";
 import { LeaveQueueSchema } from "schemas/leaveQueue.js";
 
 const routes = new Hono();

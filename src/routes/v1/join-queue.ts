@@ -5,7 +5,7 @@ import { queues } from "modules/config.js";
 import { queuesCollection, serverIdsCollection } from "modules/database.js";
 import { JoinQueueSchema } from "schemas/joinQueue.js";
 import { emptyHandler } from "modules/empty-handler.js";
-import { getPartyMatch } from "modules/matchmaking.js";
+import { getPartyMatch } from "modules/matchmaking/matchmaking.js";
 
 const routes = new Hono();
 
