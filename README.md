@@ -2,7 +2,7 @@
 
 A simple, matchmaking server designed with Bun.
 
-## Installation
+## Running
 
 To install dependencies:
 
@@ -10,7 +10,13 @@ To install dependencies:
 bun install
 ```
 
-To run:
+To run in Development Mode: (Server is restarted when changes happen)
+
+```bash
+bun dev
+```
+
+To run in Production Mode:
 
 ```bash
 bun start

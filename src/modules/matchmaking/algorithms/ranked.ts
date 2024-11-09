@@ -1,89 +1,11 @@
-import type { ObjectId, WithId } from "mongodb";
-import type { FoundMatchDocument } from "types/foundMatchDocument.js";
+import { queuesCollection } from "modules/database.js";
+import { emptyHandler } from "modules/empty-handler.js";
+import { createMatch } from "../matchmaking.js";
+import type { WithId } from "mongodb";
 import type { QueueDocument } from "types/queueDocument.js";
 import type { QueueConfig } from "types/queues.js";
-import { queues } from "./config.js";
-import { foundMatchesCollection, foundPartiesCollection, queuesCollection, serverIdsCollection } from "./database.js";
-import { emptyHandler } from "./empty-handler.js";
 
-export async function getPartyMatch(partyId: string): Promise<WithId<FoundMatchDocument> | null> {
-    const matchId: ObjectId | null = await foundPartiesCollection.findOne({ _id: partyId }).then(foundParty => {
-        if (foundParty && foundParty.matchId) {
-            return foundParty.matchId;
-        }
-        return null;
-    }).catch(() => null);
-
-    if (matchId) {
-        return await foundMatchesCollection.findOne({
-            _id: matchId
-        }).then(match => {
-            if (match) {
-                return match
-            }
-            return null
-        }).catch(() => null)
-    }
-    return null
-}
-
-async function createMatch(queueData: QueueConfig, teams: number[][], partiesUsed: string[]) {
-    const { queueId } = queueData;
-
-    const currentDate = new Date();
-
-    // find and delete a server access code
-    const serverResult = await serverIdsCollection.findOneAndDelete(
-        {},
-        { sort: { createdAt: 1 } }
-    )
-
-    const serverAccessToken = serverResult?._id
-    if (!serverAccessToken) {
-        return {
-            success: false,
-            status: "NoServerAccessCode"
-        }
-    }
-
-    // create the match
-    const insertedMatchId: ObjectId | null = await foundMatchesCollection.insertOne({
-        teams,
-        serverAccessToken,
-        queueId,
-        createdAt: currentDate
-    }).then(result => {
-        return result.insertedId;
-    }).catch(() => null);
-
-    if (!insertedMatchId) {
-        return {
-            success: false,
-            status: "FailedToCreateMatch"
-        }
-    }
-
-    // remove the parties from the queue
-    queuesCollection.deleteMany({ _id: { $in: partiesUsed } }).catch(emptyHandler);
-
-    // Insert found parties into the foundPartiesCollection
-    foundPartiesCollection.insertMany(
-        partiesUsed.map(partyId => ({
-            _id: partyId,
-            matchId: insertedMatchId,
-            createdAt: currentDate
-        }))
-    ).catch(emptyHandler);
-    
-    console.log("found match", queueId)
-
-    return {
-        success: true,
-        status: "CreatedMatch"
-    }
-}
-
-async function findRankedMatch(queueData: QueueConfig & { queueType: "ranked" }) {
+export async function findRankedMatch(queueData: QueueConfig & { queueType: "ranked" }) {
     // Destructure queue configuration
     const {
         queueId,
@@ -196,12 +118,8 @@ async function findRankedMatch(queueData: QueueConfig & { queueType: "ranked" })
                 // Remove used parties from the foundParties array
                 foundParties = foundParties.filter((party) => !partiesUsed.includes(party._id))
 
-                const { success: created, status: createResponse } = await createMatch(queueData, teams, partiesUsed);
-                if (!created) {
-                    if (createResponse == "NoServerAccessCode") {
-                        break
-                    }
-                }
+                // create matches in async, to make it quicker
+                createMatch(queueData, teams, partiesUsed);
             }
         }
 
@@ -221,44 +139,4 @@ async function findRankedMatch(queueData: QueueConfig & { queueType: "ranked" })
             ).catch(emptyHandler)
         }
     }
-}
-
-export async function discoverMatches(queueId: string) {
-    const queueData = queues.find(q => q.queueId === queueId);
-    if (!queueData) {
-        return false;
-    }
-
-    const {
-        queueType,
-        usersPerTeam,
-        teamsPerMatch
-    } = queueData;
-
-    switch (queueType) {
-        case "normal":
-            // TODO
-            break
-        case "dynamic":
-            // TODO
-            break
-        case "ranked":
-            await findRankedMatch(queueData)
-            break
-    }
-}
-
-let matchmakingInitialized = false;
-export function initMatchmaking() {
-    if (matchmakingInitialized) {
-        return;
-    }
-    matchmakingInitialized = true;
-
-    queues.forEach((queue) => {
-        const { queueId, discoverMatchesInterval } = queue;
-        setInterval(() => {
-            discoverMatches(queueId);
-        }, (discoverMatchesInterval * 1000))
-    })
 }
