@@ -1,4 +1,4 @@
-import { QUEUE_EXPIRE_AFTER, SERVER_EXPIRE_AFTER } from "./config.js";
+import { QUEUE_EXPIRE_AFTER, SERVER_EXPIRE_AFTER, MATCHES_EXPIRE_AFTER } from "./config.js";
 import { queuesCollection, serverIdsCollection, foundMatchesCollection, foundPartiesCollection } from "./database.js";
 import { emptyHandler } from "./empty-handler.js";
 
@@ -19,9 +19,9 @@ export function createIndexes() {
 
   // FOUND MATCHES COLLECTION //
   // Creatd At Index
-  foundMatchesCollection.createIndex({ createdAt: -1 }, { name: "createdAt", expireAfterSeconds: SERVER_EXPIRE_AFTER }).catch(emptyHandler);
+  foundMatchesCollection.createIndex({ createdAt: -1 }, { name: "createdAt", expireAfterSeconds: MATCHES_EXPIRE_AFTER }).catch(emptyHandler);
 
   // FOUND PARTIES COLLECTION //
   // Creatd At Index
-  foundPartiesCollection.createIndex({ createdAt: -1 }, { name: "createdAt", expireAfterSeconds: SERVER_EXPIRE_AFTER }).catch(emptyHandler);
+  foundPartiesCollection.createIndex({ createdAt: -1 }, { name: "createdAt", expireAfterSeconds: MATCHES_EXPIRE_AFTER }).catch(emptyHandler);
 }
