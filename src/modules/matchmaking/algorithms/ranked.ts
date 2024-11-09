@@ -1,8 +1,6 @@
 import { queuesCollection } from "modules/database.js";
 import { emptyHandler } from "modules/empty-handler.js";
 import { createMatch } from "../matchmaking.js";
-import type { WithId } from "mongodb";
-import type { QueueDocument } from "types/queueDocument.js";
 import type { QueueConfig } from "types/queues.js";
 
 export async function findRankedMatch(queueData: QueueConfig & { queueType: "ranked" }) {
@@ -15,128 +13,122 @@ export async function findRankedMatch(queueData: QueueConfig & { queueType: "ran
         incrementRange
     } = queueData;
 
-    // Find up to 100 parties in the queue, sorted by time added
-    let foundParties = await queuesCollection
+    // Fetch all parties in the queue, sorted by time added
+    let allParties = await queuesCollection
         .find({ queueId })
         .sort({ timeAdded: 1 })
-        .limit(100)
+        .limit(2500)
         .toArray()
         .catch(emptyHandler);
 
-    while (true) {
-        // Get the next party from the queue
-        const originalParty = foundParties.shift();
-        if (!originalParty) break
+    if (!allParties || allParties.length === 0) return;
 
-        // Destructure party data
-        const {
-            _id,
-            userIds,
-            queueId,
-            timeAdded,
-            rankedValue
-        } = originalParty;
+    // Filter out parties with invalid rankedValue
+    allParties = allParties.filter(party => party.rankedValue !== null && party.rankedValue !== undefined);
 
-        if (rankedValue === null || rankedValue === undefined) continue
+    // Initialize a set to keep track of used parties
+    const usedPartyIds = new Set<string>();
 
-        // Set ranked value range for the party
-        const rankedMax = originalParty.rankedMax ?? rankedValue;
-        const rankedMin = originalParty.rankedMin ?? rankedValue;
+    // Sort parties by rankedValue
+    allParties.sort((a, b) => a.rankedValue - b.rankedValue);
 
-        let foundMatch = false
+    // While there are enough parties to form a match
+    while (allParties.length - usedPartyIds.size >= teamsPerMatch * usersPerTeam) {
+        let foundMatch = false;
 
-        // Find potential matching parties within the ranked value range
-        const partiesInRange = (await queuesCollection.find({
-            queueId,
-            rankedValue: { $gte: rankedMin + searchRange[1], $lte: rankedMax - searchRange[0] },
-            _id: { $ne: _id }
-        })
-            .sort({ timeAdded: 1 })
-            .limit(teamsPerMatch * usersPerTeam)
-            .toArray()
-            .catch(emptyHandler))
-            
-        partiesInRange.push(originalParty)
-            
-        const sortedPartiesInRange = partiesInRange.sort((a, b) => b.userIds.length - a.userIds.length);
+        // For each party
+        for (const originalParty of allParties) {
+            if (usedPartyIds.has(originalParty._id)) continue;
 
-        // Calculate total number of players in matching parties
-        const playersInQueue = sortedPartiesInRange.map((party) => {
-            return party.userIds.length;
-        }).reduce((playersInQueue, partyPlayers) => {
-            return playersInQueue + partyPlayers;
-        }, 0)
+            const rankedValue = originalParty.rankedValue;
+            let rankedMin = originalParty.rankedMin ?? rankedValue;
+            let rankedMax = originalParty.rankedMax ?? rankedValue;
 
-        // If there are enough players to form teams
-        if (playersInQueue >= (usersPerTeam * teamsPerMatch)) {
-            const teams: number[][] = Array.from({ length: teamsPerMatch }, () => []);
+            // Find parties within the ranked value range
+            const partiesInRange = allParties.filter(party => {
+                if (usedPartyIds.has(party._id)) return false;
+                const partyRankedValue = party.rankedValue;
+                return partyRankedValue >= rankedMin - searchRange[0] && partyRankedValue <= rankedMax + searchRange[1];
+            });
 
-            const partiesUsed: string[] = [];
+            // Calculate total number of players
+            const totalPlayers = partiesInRange.reduce((sum, party) => sum + party.userIds.length, 0);
 
-            let teamFilling = 0;
+            // If enough players
+            if (totalPlayers >= usersPerTeam * teamsPerMatch) {
+                // Sort parties by size (largest first)
+                partiesInRange.sort((a, b) => b.userIds.length - a.userIds.length);
 
-            // Parties to put back when filling another team
-            let puttingBackParties: WithId<QueueDocument>[] = [];
+                const teams: number[][] = Array.from({ length: teamsPerMatch }, () => []);
 
-            while (true) {
-                if (teamFilling >= teamsPerMatch) break
+                const partiesUsed: string[] = [];
 
-                // Get the next party to add to a team
-                const nextParty = sortedPartiesInRange.shift();
-                if (!nextParty) break
+                let teamIndex = 0;
 
-                const team = teams[teamFilling];
-                // If the party fits in the current team
-                if ((team.length + nextParty.userIds.length) <= usersPerTeam) {
-                    nextParty.userIds.forEach((userId) => {
-                        team.push(userId)
-                    })
+                for (const party of partiesInRange) {
+                    if (usedPartyIds.has(party._id)) continue;
 
-                    partiesUsed.push(nextParty._id);
+                    // Try to add party to the current team
+                    if (teams[teamIndex].length + party.userIds.length <= usersPerTeam) {
+                        teams[teamIndex].push(...party.userIds);
+                        usedPartyIds.add(party._id);
+                        partiesUsed.push(party._id);
+                    } else {
+                        // Move to next team
+                        teamIndex = (teamIndex + 1) % teamsPerMatch;
 
-                    // If the team is full, move to the next team
-                    if (team.length >= usersPerTeam) {
-                        for (const party of puttingBackParties) {
-                            sortedPartiesInRange.unshift(party);
+                        // Try again to add the party
+                        if (teams[teamIndex].length + party.userIds.length <= usersPerTeam) {
+                            teams[teamIndex].push(...party.userIds);
+                            usedPartyIds.add(party._id);
+                            partiesUsed.push(party._id);
+                        } else {
+                            // Can't fit this party, continue to next party
+                            continue;
                         }
-                        puttingBackParties = [];
-
-                        teamFilling++;
                     }
-                } else {
-                    if (nextParty !== originalParty) {
-                        // Put the party back at the front of the queue
-                        puttingBackParties.push(nextParty);
+
+                    // Check if all teams are filled
+                    const allTeamsFilled = teams.every(team => team.length === usersPerTeam);
+
+                    if (allTeamsFilled) {
+                        createMatch(queueData, teams, partiesUsed);
+                        foundMatch = true;
+                        break;
                     }
                 }
-            }
 
-            // If all teams are filled, a match is found
-            if (teamFilling >= teamsPerMatch) {
-                foundMatch = true;
+                if (foundMatch) {
+                    // Remove used parties from allParties
+                    allParties = allParties.filter(party => !usedPartyIds.has(party._id));
+                    break; // Break out of the for-loop to start over
+                } else {
+                    // Not able to form teams with these parties, expand ranked range
+                    rankedMin -= incrementRange[0];
+                    rankedMax += incrementRange[1];
 
-                // Remove used parties from the foundParties array
-                foundParties = foundParties.filter((party) => !partiesUsed.includes(party._id))
+                    // Update in database
+                    queuesCollection.updateOne(
+                        { _id: originalParty._id },
+                        { $set: { rankedMin, rankedMax } }
+                    ).catch(emptyHandler);
+                }
+            } else {
+                // Not enough players, expand ranked range
+                rankedMin -= incrementRange[0];
+                rankedMax += incrementRange[1];
 
-                // create matches in async, to make it quicker
-                createMatch(queueData, teams, partiesUsed);
+                // Update in database
+                queuesCollection.updateOne(
+                    { _id: originalParty._id },
+                    { $set: { rankedMin, rankedMax } }
+                ).catch(emptyHandler);
             }
         }
 
-        // If no match is found, update the party's ranked value range
         if (!foundMatch) {
-            queuesCollection.updateOne(
-                {
-                    _id,
-                    queueId
-                },
-                {
-                    $set: {
-                        rankedMax: (rankedMax + incrementRange[1]),
-                        rankedMin: (rankedMin - incrementRange[0])
-                    }
-                }
-            ).catch(emptyHandler)
+            // No more matches can be formed
+            break;
         }
     }
 }
