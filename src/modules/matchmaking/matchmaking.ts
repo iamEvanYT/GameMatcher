@@ -114,10 +114,15 @@ export function initMatchmaking() {
     }
     matchmakingInitialized = true;
 
-    queues.forEach((queue) => {
+    for (const queue of queues) {
         const { queueId, discoverMatchesInterval } = queue;
-        setInterval(() => {
-            discoverMatches(queueId);
-        }, (discoverMatchesInterval * 1000))
-    })
+        
+        // Start an async function to handle the loop for each queue
+        (async () => {
+            while (true) {
+                await discoverMatches(queueId);
+                await new Promise(resolve => setTimeout(resolve, discoverMatchesInterval * 1000));
+            }
+        })();
+    }
 }
