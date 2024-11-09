@@ -76,7 +76,7 @@ export async function createMatch(queueData: QueueConfig, teams: number[][], par
         }))
     ).catch(emptyHandler);
 
-    console.log("found match", queueId)
+    console.log("found match", queueId, insertedMatchId.toString())
 
     return {
         success: true,

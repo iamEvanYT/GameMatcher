@@ -118,12 +118,8 @@ export async function findRankedMatch(queueData: QueueConfig & { queueType: "ran
                 // Remove used parties from the foundParties array
                 foundParties = foundParties.filter((party) => !partiesUsed.includes(party._id))
 
-                const { success: created, status: createResponse } = await createMatch(queueData, teams, partiesUsed);
-                if (!created) {
-                    if (createResponse == "NoServerAccessCode") {
-                        break
-                    }
-                }
+                // create matches in async, to make it quicker
+                createMatch(queueData, teams, partiesUsed);
             }
         }
 

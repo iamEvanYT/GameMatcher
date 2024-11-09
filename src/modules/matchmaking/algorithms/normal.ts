@@ -96,12 +96,8 @@ export async function findNormalMatch(queueData: QueueConfig & { queueType: "nor
                 // Remove used parties from the foundParties array
                 foundParties = foundParties.filter((party) => !partiesUsed.includes(party._id));
 
-                const { success: created, status: createResponse } = await createMatch(queueData, teams, partiesUsed);
-                if (!created) {
-                    if (createResponse == "NoServerAccessCode") {
-                        break;
-                    }
-                }
+                // create matches in async, to make it quicker
+                await createMatch(queueData, teams, partiesUsed);
             }
         }
 
