@@ -18,12 +18,13 @@ async function expandSearchRange(queueData: QueueConfig & { queueType: "ranked" 
     const originalRankedMin = rankedMin;
     const originalRankedMax = rankedMax;
 
-    const maxDifferences = (rankedMax - rankedValue);
-    const minDifferences = (rankedValue - rankedMin);
-
     // Not enough players, expand ranked range
     rankedMin -= incrementRange[0];
     rankedMax += incrementRange[1];
+
+    // Check for differences between min and max
+    const maxDifferences = (rankedMax - rankedValue);
+    const minDifferences = (rankedValue - rankedMin);
 
     // Cap the range
     if (incrementRangeMax) {
