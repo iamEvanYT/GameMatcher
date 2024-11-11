@@ -24,10 +24,10 @@ export const queues: QueueConfigs = [
         usersPerTeam: 2,
         teamsPerMatch: 2,
     
-        discoverMatchesInterval: 5,
+        discoverMatchesInterval: 6,
 
         searchRange: [0, 0],
-        incrementRange: [0.1, 0.1],
+        incrementRange: [0.2, 0.2],
     }
 ] as const;
 export const validQueueIds = [
