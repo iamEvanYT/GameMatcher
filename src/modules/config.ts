@@ -27,7 +27,7 @@ export const queues: QueueConfigs = [
         discoverMatchesInterval: 5,
 
         searchRange: [0, 0],
-        incrementRange: [1, 1],
+        incrementRange: [0.1, 0.1],
     }
 ] as const;
 export const validQueueIds = [
