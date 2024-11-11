@@ -5,6 +5,8 @@ import type { QueueConfig } from "types/queues.js";
 import type { WithId } from "mongodb";
 import type { QueueDocument } from "types/queueDocument.js";
 
+const DOUBLE_RANGE_REQUIRED = true; // Set this to false to disable double range requirement: both party's range has to be within each other
+
 async function expandSearchRange(queueData: QueueConfig & { queueType: "ranked" }, originalParty: WithId<QueueDocument>) {
     const {
         incrementRange,
@@ -97,7 +99,16 @@ export async function findRankedMatch(queueData: QueueConfig & { queueType: "ran
             const partiesInRange = allParties.filter(party => {
                 if (usedPartyIds.has(party._id)) return false;
                 const partyRankedValue = party.rankedValue;
-                return partyRankedValue >= rankedMin && partyRankedValue <= rankedMax;
+                if (partyRankedValue < rankedMin || partyRankedValue > rankedMax) return false;
+
+                if (DOUBLE_RANGE_REQUIRED) {
+                    // Need to check if originalParty's rankedValue is within the other party's range
+                    let partyRankedMin = party.rankedMin ?? partyRankedValue - searchRange[0];
+                    let partyRankedMax = party.rankedMax ?? partyRankedValue + searchRange[1];
+                    if (originalParty.rankedValue < partyRankedMin || originalParty.rankedValue > partyRankedMax) return false;
+                }
+
+                return true;
             });
 
             // Calculate total number of players
