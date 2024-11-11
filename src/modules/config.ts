@@ -28,6 +28,7 @@ export const queues: QueueConfigs = [
 
         searchRange: [0, 0],
         incrementRange: [0.2, 0.2],
+        incrementRangeMax: [2, 2] // TODO: implement
     }
 ] as const;
 export const validQueueIds = [
