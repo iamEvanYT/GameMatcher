@@ -23,6 +23,7 @@ type RankedQueueConfig = BasicQueueConfig & {
 
     searchRange: [number, number],
     incrementRange: [number, number],
+    incrementRangeMax?: [number, number]
 }
 
 export type QueueConfig = NormalQueueConfig | DynamicQueueConfig | RankedQueueConfig

@@ -2,6 +2,55 @@ import { queuesCollection } from "modules/database.js";
 import { emptyHandler } from "modules/empty-handler.js";
 import { createMatch } from "../matchmaking.js";
 import type { QueueConfig } from "types/queues.js";
+import type { WithId } from "mongodb";
+import type { QueueDocument } from "types/queueDocument.js";
+
+async function expandSearchRange(queueData: QueueConfig & { queueType: "ranked" }, originalParty: WithId<QueueDocument>) {
+    const {
+        incrementRange,
+        incrementRangeMax
+    } = queueData;
+
+    const rankedValue = originalParty.rankedValue;
+    let rankedMin = originalParty.rankedMin ?? rankedValue;
+    let rankedMax = originalParty.rankedMax ?? rankedValue;
+
+    const originalRankedMin = rankedMin;
+    const originalRankedMax = rankedMax;
+
+    const maxDifferences = (rankedMax - rankedValue);
+    const minDifferences = (rankedValue - rankedMin);
+
+    // Not enough players, expand ranked range
+    rankedMin -= incrementRange[0];
+    rankedMax += incrementRange[1];
+
+    // Cap the range
+    if (incrementRangeMax) {
+        if (minDifferences > incrementRangeMax[0]) {
+            rankedMin = rankedValue - incrementRangeMax[0];
+        }
+        if (maxDifferences > incrementRangeMax[1]) {
+            rankedMax = rankedValue + incrementRangeMax[1];
+        }
+    }
+
+    if (originalRankedMin === rankedMin && originalRankedMax === rankedMax) {
+        // nothing changed
+        return false;
+    }
+
+    // Update in database
+    queuesCollection.updateOne(
+        { _id: originalParty._id },
+        { $set: { rankedMin, rankedMax } }
+    ).catch(emptyHandler);
+
+    // Update the originalParty object in memory
+    originalParty.rankedMin = rankedMin;
+    originalParty.rankedMax = rankedMax;
+    return true;
+}
 
 export async function findRankedMatch(queueData: QueueConfig & { queueType: "ranked" }) {
     const {
@@ -97,33 +146,11 @@ export async function findRankedMatch(queueData: QueueConfig & { queueType: "ran
                     break; // Break out of the for-loop to start over
                 } else {
                     // Not able to form teams with these parties, expand ranked range
-                    rankedMin -= incrementRange[0];
-                    rankedMax += incrementRange[1];
-
-                    // Update in database
-                    await queuesCollection.updateOne(
-                        { _id: originalParty._id },
-                        { $set: { rankedMin, rankedMax } }
-                    ).catch(emptyHandler);
-
-                    // Update the originalParty object in memory
-                    originalParty.rankedMin = rankedMin;
-                    originalParty.rankedMax = rankedMax;
+                    await expandSearchRange(queueData, originalParty);
                 }
             } else {
                 // Not enough players, expand ranked range
-                rankedMin -= incrementRange[0];
-                rankedMax += incrementRange[1];
-
-                // Update in database
-                await queuesCollection.updateOne(
-                    { _id: originalParty._id },
-                    { $set: { rankedMin, rankedMax } }
-                ).catch(emptyHandler);
-
-                // Update the originalParty object in memory
-                originalParty.rankedMin = rankedMin;
-                originalParty.rankedMax = rankedMax;
+                await expandSearchRange(queueData, originalParty);
             }
         }
     }
