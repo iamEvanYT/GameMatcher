@@ -1,26 +1,17 @@
-import { queuesCollection } from "modules/database.js";
-import { emptyHandler } from "modules/empty-handler.js";
-import { createMatch } from "../matchmaking.js";
 import type { QueueConfig } from "types/queues.js";
-import type { WithId } from "mongodb";
-import type { QueueDocument } from "types/queueDocument.js";
+import type { Algorithm } from "./types.js";
+import { packTeamsGreedy, sumUsers } from "./utils.js";
 
 // Normal matchmaking: ignore ranked ranges and just form matches
 // by packing parties up to usersPerTeam across teamsPerMatch teams.
-export async function findNormalMatch(queueData: QueueConfig & { queueType: "normal" }) {
+export const findNormalMatch: Algorithm<QueueConfig & { queueType: "normal" }> = async (queueData, services) => {
     const {
         queueId,
         usersPerTeam,
         teamsPerMatch,
     } = queueData;
 
-    let allParties: WithId<QueueDocument>[] | null = await queuesCollection
-        .find({ queueId })
-        .sort({ timeAdded: 1 })
-        .limit(2500)
-        .toArray()
-        .catch(emptyHandler as any);
-
+    let allParties = await services.getOldestParties(queueId, 2500);
     if (!allParties || allParties.length === 0) return;
 
     // Track used parties across iterations so we can keep forming matches
@@ -35,48 +26,19 @@ export async function findNormalMatch(queueData: QueueConfig & { queueType: "nor
         if (availableParties.length === 0) break;
 
         // Check if we have enough players overall to attempt a match
-        const totalPlayers = availableParties.reduce((sum, party) => sum + party.userIds.length, 0);
+        const totalPlayers = sumUsers(availableParties);
         const requiredPlayers = usersPerTeam * teamsPerMatch;
         if (totalPlayers < requiredPlayers) break;
-
-        // Greedy packing: largest parties first to fill teams
-        availableParties.sort((a, b) => b.userIds.length - a.userIds.length);
-
-        const teams: number[][] = Array.from({ length: teamsPerMatch }, () => []);
-        const partiesUsed: string[] = [];
-
-        for (const party of availableParties) {
-            // Try to fit party into any team with enough remaining slots
-            let placed = false;
-            for (const team of teams) {
-                if (team.length + party.userIds.length <= usersPerTeam) {
-                    team.push(...party.userIds);
-                    partiesUsed.push(party._id);
-                    usedPartyIds.add(party._id);
-                    placed = true;
-                    break;
-                }
-            }
-
-            // If we've filled all teams exactly, create the match
-            const allTeamsFilled = teams.every(team => team.length === usersPerTeam);
-            if (allTeamsFilled) {
-                await createMatch(queueData, teams, partiesUsed);
-                foundMatchInThisIteration = true;
-                break;
-            }
-
-            // If party couldn't be placed, skip it and try next party
-            if (!placed) continue;
-        }
-
-        if (foundMatchInThisIteration) {
+        const packed = packTeamsGreedy(availableParties, teamsPerMatch, usersPerTeam);
+        if (packed) {
+            await services.createMatch(queueData, packed.teams, packed.partiesUsed);
+            packed.partiesUsed.forEach(id => usedPartyIds.add(id));
             // Remove used parties from local list and try to form another match
             allParties = allParties.filter(p => !usedPartyIds.has(p._id));
+            foundMatchInThisIteration = true;
         } else {
             // Could not form a complete match with current composition
             break;
         }
     }
 }
-

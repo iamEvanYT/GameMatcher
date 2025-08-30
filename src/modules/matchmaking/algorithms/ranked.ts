@@ -1,13 +1,12 @@
-import { queuesCollection } from "modules/database.js";
-import { emptyHandler } from "modules/empty-handler.js";
-import { createMatch } from "../matchmaking.js";
 import type { QueueConfig } from "types/queues.js";
 import type { WithId } from "mongodb";
 import type { QueueDocument } from "types/queueDocument.js";
+import type { Algorithm, Services } from "./types.js";
+import { packTeamsGreedy, sumUsers } from "./utils.js";
 
 const DOUBLE_RANGE_REQUIRED = true; // Set this to false to disable double range requirement: both party's range has to be within each other
 
-async function expandSearchRange(queueData: QueueConfig & { queueType: "ranked" }, originalParty: WithId<QueueDocument>) {
+async function expandSearchRange(queueData: QueueConfig & { queueType: "ranked" }, originalParty: WithId<QueueDocument>, services: Services) {
     const {
         incrementRange,
         incrementRangeMax
@@ -43,11 +42,10 @@ async function expandSearchRange(queueData: QueueConfig & { queueType: "ranked" 
         return false;
     }
 
-    // Update in database
-    queuesCollection.updateOne(
-        { _id: originalParty._id },
-        { $set: { rankedMin, rankedMax } }
-    ).catch(emptyHandler);
+    // Persist in database via service
+    if (services.updatePartyRange) {
+        await services.updatePartyRange(originalParty._id, rankedMin, rankedMax);
+    }
 
     // Update the originalParty object in memory
     originalParty.rankedMin = rankedMin;
@@ -55,21 +53,15 @@ async function expandSearchRange(queueData: QueueConfig & { queueType: "ranked" 
     return true;
 }
 
-export async function findRankedMatch(queueData: QueueConfig & { queueType: "ranked" }) {
+export const findRankedMatch: Algorithm<QueueConfig & { queueType: "ranked" }> = async (queueData, services) => {
     const {
         queueId,
         usersPerTeam,
         teamsPerMatch,
         searchRange,
-        incrementRange
     } = queueData;
 
-    let allParties = await queuesCollection
-        .find({ queueId })
-        .sort({ timeAdded: 1 })
-        .limit(2500)
-        .toArray()
-        .catch(emptyHandler);
+    let allParties = await services.getOldestParties(queueId, 2500);
 
     if (!allParties || allParties.length === 0) return;
 
@@ -112,57 +104,25 @@ export async function findRankedMatch(queueData: QueueConfig & { queueType: "ran
             });
 
             // Calculate total number of players
-            const totalPlayers = partiesInRange.reduce((sum, party) => sum + party.userIds.length, 0);
+            const totalPlayers = sumUsers(partiesInRange);
 
             // If enough players to form a match
             if (totalPlayers >= usersPerTeam * teamsPerMatch) {
-                // Sort parties by size (largest first)
-                partiesInRange.sort((a, b) => b.userIds.length - a.userIds.length);
-
-                const teams: number[][] = Array.from({ length: teamsPerMatch }, () => []);
-                const partiesUsed: string[] = [];
-
-                // Assign parties to teams
-                for (const party of partiesInRange) {
-                    if (usedPartyIds.has(party._id)) continue;
-
-                    // Try to add party to any team where it fits
-                    let partyAdded = false;
-                    for (const team of teams) {
-                        if (team.length + party.userIds.length <= usersPerTeam) {
-                            team.push(...party.userIds);
-                            usedPartyIds.add(party._id);
-                            partiesUsed.push(party._id);
-                            partyAdded = true;
-                            break; // Break the team loop once the party is added
-                        }
-                    }
-
-                    if (!partyAdded) {
-                        continue; // Couldn't add this party to any team
-                    }
-
-                    // Check if all teams are filled
-                    const allTeamsFilled = teams.every(team => team.length === usersPerTeam);
-
-                    if (allTeamsFilled) {
-                        await createMatch(queueData, teams, partiesUsed);
-                        foundMatchInThisIteration = true;
-                        break; // Break out of the parties loop to start over
-                    }
-                }
-
-                if (foundMatchInThisIteration) {
+                const packed = packTeamsGreedy(partiesInRange, teamsPerMatch, usersPerTeam);
+                if (packed) {
+                    await services.createMatch(queueData, packed.teams, packed.partiesUsed);
+                    packed.partiesUsed.forEach(id => usedPartyIds.add(id));
                     // Remove used parties from allParties
                     allParties = allParties.filter(party => !usedPartyIds.has(party._id));
-                    break; // Break out of the for-loop to start over
+                    foundMatchInThisIteration = true;
+                    break; // Break out to start over
                 } else {
                     // Not able to form teams with these parties, expand ranked range
-                    await expandSearchRange(queueData, originalParty);
+                    await expandSearchRange(queueData, originalParty, services);
                 }
             } else {
                 // Not enough players, expand ranked range
-                await expandSearchRange(queueData, originalParty);
+                await expandSearchRange(queueData, originalParty, services);
             }
         }
     }

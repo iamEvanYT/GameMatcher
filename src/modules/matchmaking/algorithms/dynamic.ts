@@ -1,15 +1,12 @@
-import { queuesCollection } from "modules/database.js";
-import { emptyHandler } from "modules/empty-handler.js";
-import { createMatch } from "../matchmaking.js";
 import type { QueueConfig } from "types/queues.js";
-import type { WithId } from "mongodb";
-import type { QueueDocument } from "types/queueDocument.js";
+import type { Algorithm } from "./types.js";
+import { ageSeconds, packTeamsGreedy, sumUsers } from "./utils.js";
 
 // Dynamic matchmaking:
 // - Chooses an effective team size between min and max.
 // - Before the elapsed threshold, uses maxUsersPerTeam to prefer fuller teams.
 // - After the elapsed threshold (based on oldest party), uses minUsersPerTeam to relax requirements.
-export async function findDynamicMatch(queueData: QueueConfig & { queueType: "dynamic" }) {
+export const findDynamicMatch: Algorithm<QueueConfig & { queueType: "dynamic" }> = async (queueData, services) => {
     const {
         queueId,
         teamsPerMatch,
@@ -18,19 +15,13 @@ export async function findDynamicMatch(queueData: QueueConfig & { queueType: "dy
         timeElaspedToUseMinimumUsers,
     } = queueData;
 
-    let allParties: WithId<QueueDocument>[] | null = await queuesCollection
-        .find({ queueId })
-        .sort({ timeAdded: 1 })
-        .limit(2500)
-        .toArray()
-        .catch(emptyHandler as any);
-
+    let allParties = await services.getOldestParties(queueId, 2500);
     if (!allParties || allParties.length === 0) return;
 
     // Determine effective team size based on oldest party wait time
-    const now = Date.now();
+    const now = services.now();
     const oldest = allParties[0];
-    const elapsedSec = Math.floor((now - oldest.timeAdded.getTime()) / 1000);
+    const elapsedSec = ageSeconds(oldest.timeAdded, now);
     const effectiveUsersPerTeam = elapsedSec >= timeElaspedToUseMinimumUsers
         ? minUsersPerTeam
         : maxUsersPerTeam;
@@ -45,43 +36,17 @@ export async function findDynamicMatch(queueData: QueueConfig & { queueType: "dy
         const availableParties = allParties.filter(p => !usedPartyIds.has(p._id));
         if (availableParties.length === 0) break;
 
-        const totalPlayers = availableParties.reduce((sum, p) => sum + p.userIds.length, 0);
+        const totalPlayers = sumUsers(availableParties);
         const requiredPlayers = effectiveUsersPerTeam * teamsPerMatch;
         if (totalPlayers < requiredPlayers) break;
-
-        // Greedy packing: largest parties first
-        availableParties.sort((a, b) => b.userIds.length - a.userIds.length);
-
-        const teams: number[][] = Array.from({ length: teamsPerMatch }, () => []);
-        const partiesUsed: string[] = [];
-
-        for (const party of availableParties) {
-            let placed = false;
-            for (const team of teams) {
-                if (team.length + party.userIds.length <= effectiveUsersPerTeam) {
-                    team.push(...party.userIds);
-                    partiesUsed.push(party._id);
-                    usedPartyIds.add(party._id);
-                    placed = true;
-                    break;
-                }
-            }
-
-            const allTeamsFilled = teams.every(team => team.length === effectiveUsersPerTeam);
-            if (allTeamsFilled) {
-                await createMatch(queueData, teams, partiesUsed);
-                foundMatchInThisIteration = true;
-                break;
-            }
-
-            if (!placed) continue;
-        }
-
-        if (foundMatchInThisIteration) {
+        const packed = packTeamsGreedy(availableParties, teamsPerMatch, effectiveUsersPerTeam);
+        if (packed) {
+            await services.createMatch(queueData, packed.teams, packed.partiesUsed);
+            packed.partiesUsed.forEach(id => usedPartyIds.add(id));
             allParties = allParties.filter(p => !usedPartyIds.has(p._id));
+            foundMatchInThisIteration = true;
         } else {
             break;
         }
     }
 }
-
