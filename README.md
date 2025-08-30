@@ -33,6 +33,14 @@ GameMatcher/
 ├── Dockerfile               # Docker configuration
 ```
 
+## Documentation
+
+See the docs folder for usage guides:
+- docs/quickstart.md — local run and development
+- docs/api.md — endpoint reference and examples
+- docs/roblox.md — integrate from Roblox (Luau)
+- docs/docker.md — container build and run
+
 ## Installation
 
 ### Prerequisites
