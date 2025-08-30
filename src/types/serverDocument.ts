@@ -1,4 +1,4 @@
 export interface ServerDocument {
-  _id: string,
-  createdAt: Date,
+  _id: string;
+  createdAt: Date;
 }

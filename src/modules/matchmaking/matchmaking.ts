@@ -2,19 +2,12 @@ import type { ObjectId, WithId } from "mongodb";
 import type { FoundMatchDocument } from "types/foundMatchDocument.js";
 import type { QueueConfig } from "types/queues.js";
 import { queues } from "../config.js";
-import {
-  foundMatchesCollection,
-  foundPartiesCollection,
-  queuesCollection,
-  serverIdsCollection,
-} from "../database.js";
+import { foundMatchesCollection, foundPartiesCollection, queuesCollection, serverIdsCollection } from "../database.js";
 import { emptyHandler } from "../empty-handler.js";
 import { algorithmRegistry } from "./algorithms/index.js";
 import type { Services } from "./algorithms/types.js";
 
-export async function getPartyMatch(
-  partyId: string
-): Promise<WithId<FoundMatchDocument> | null> {
+export async function getPartyMatch(partyId: string): Promise<WithId<FoundMatchDocument> | null> {
   const matchId: ObjectId | null = await foundPartiesCollection
     .findOne({ _id: partyId })
     .then((foundParty) => {
@@ -28,7 +21,7 @@ export async function getPartyMatch(
   if (matchId) {
     return await foundMatchesCollection
       .findOne({
-        _id: matchId,
+        _id: matchId
       })
       .then((match) => {
         if (match) {
@@ -41,26 +34,19 @@ export async function getPartyMatch(
   return null;
 }
 
-export async function createMatch(
-  queueData: QueueConfig,
-  teams: number[][],
-  partiesUsed: string[]
-) {
+export async function createMatch(queueData: QueueConfig, teams: number[][], partiesUsed: string[]) {
   const { queueId } = queueData;
 
   const currentDate = new Date();
 
   // find and delete a server access code
-  const serverResult = await serverIdsCollection.findOneAndDelete(
-    {},
-    { sort: { createdAt: 1 } }
-  );
+  const serverResult = await serverIdsCollection.findOneAndDelete({}, { sort: { createdAt: 1 } });
 
   const serverAccessToken = serverResult?._id;
   if (!serverAccessToken) {
     return {
       success: false,
-      status: "NoServerAccessCode",
+      status: "NoServerAccessCode"
     };
   }
 
@@ -70,7 +56,7 @@ export async function createMatch(
       teams,
       serverAccessToken,
       queueId,
-      createdAt: currentDate,
+      createdAt: currentDate
     })
     .then((result) => {
       return result.insertedId;
@@ -80,14 +66,12 @@ export async function createMatch(
   if (!insertedMatchId) {
     return {
       success: false,
-      status: "FailedToCreateMatch",
+      status: "FailedToCreateMatch"
     };
   }
 
   // remove the parties from the queue
-  queuesCollection
-    .deleteMany({ _id: { $in: partiesUsed } })
-    .catch(emptyHandler);
+  queuesCollection.deleteMany({ _id: { $in: partiesUsed } }).catch(emptyHandler);
 
   // Insert found parties into the foundPartiesCollection
   foundPartiesCollection
@@ -95,7 +79,7 @@ export async function createMatch(
       partiesUsed.map((partyId) => ({
         _id: partyId,
         matchId: insertedMatchId,
-        createdAt: currentDate,
+        createdAt: currentDate
       }))
     )
     .catch(emptyHandler);
@@ -104,7 +88,7 @@ export async function createMatch(
 
   return {
     success: true,
-    status: "CreatedMatch",
+    status: "CreatedMatch"
   };
 }
 
@@ -124,18 +108,12 @@ export async function discoverMatches(queueId: string) {
         .catch(emptyHandler as any);
       return docs || [];
     },
-    updatePartyRange: async (
-      partyId: string,
-      rankedMin: number,
-      rankedMax: number
-    ) => {
-      await queuesCollection
-        .updateOne({ _id: partyId }, { $set: { rankedMin, rankedMax } })
-        .catch(emptyHandler);
+    updatePartyRange: async (partyId: string, rankedMin: number, rankedMax: number) => {
+      await queuesCollection.updateOne({ _id: partyId }, { $set: { rankedMin, rankedMax } }).catch(emptyHandler);
     },
     createMatch: (data, teams, parties) => createMatch(data, teams, parties),
     now: () => new Date(),
-    log: (message, meta) => console.log(`[matchmaking] ${message}`, meta ?? {}),
+    log: (message, meta) => console.log(`[matchmaking] ${message}`, meta ?? {})
   };
 
   const algo = algorithmRegistry[queueData.queueType];
@@ -156,9 +134,7 @@ export function initMatchmaking() {
     (async () => {
       while (true) {
         await discoverMatches(queueId);
-        await new Promise((resolve) =>
-          setTimeout(resolve, discoverMatchesInterval * 1000)
-        );
+        await new Promise((resolve) => setTimeout(resolve, discoverMatchesInterval * 1000));
       }
     })();
   }

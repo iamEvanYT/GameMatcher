@@ -11,17 +11,25 @@ export function createIndexes() {
   queuesCollection.createIndex({ queueId: -1 }, { name: "queueId" }).catch(emptyHandler);
 
   // Time Added Index
-  queuesCollection.createIndex({ timeAdded: -1 }, { name: "timeAdded", expireAfterSeconds: QUEUE_EXPIRE_AFTER }).catch(emptyHandler);
+  queuesCollection
+    .createIndex({ timeAdded: -1 }, { name: "timeAdded", expireAfterSeconds: QUEUE_EXPIRE_AFTER })
+    .catch(emptyHandler);
 
   // SERVER IDS COLLECTION //
   // Created At Index
-  serverIdsCollection.createIndex({ createdAt: -1 }, { name: "createdAt", expireAfterSeconds: SERVER_EXPIRE_AFTER }).catch(emptyHandler);
+  serverIdsCollection
+    .createIndex({ createdAt: -1 }, { name: "createdAt", expireAfterSeconds: SERVER_EXPIRE_AFTER })
+    .catch(emptyHandler);
 
   // FOUND MATCHES COLLECTION //
   // Creatd At Index
-  foundMatchesCollection.createIndex({ createdAt: -1 }, { name: "createdAt", expireAfterSeconds: MATCHES_EXPIRE_AFTER }).catch(emptyHandler);
+  foundMatchesCollection
+    .createIndex({ createdAt: -1 }, { name: "createdAt", expireAfterSeconds: MATCHES_EXPIRE_AFTER })
+    .catch(emptyHandler);
 
   // FOUND PARTIES COLLECTION //
   // Creatd At Index
-  foundPartiesCollection.createIndex({ createdAt: -1 }, { name: "createdAt", expireAfterSeconds: MATCHES_EXPIRE_AFTER }).catch(emptyHandler);
+  foundPartiesCollection
+    .createIndex({ createdAt: -1 }, { name: "createdAt", expireAfterSeconds: MATCHES_EXPIRE_AFTER })
+    .catch(emptyHandler);
 }

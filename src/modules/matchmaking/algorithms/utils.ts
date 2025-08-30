@@ -34,7 +34,7 @@ export function packTeamsGreedy(
         break;
       }
     }
-    const allFilled = teams.every(t => t.length === usersPerTeam);
+    const allFilled = teams.every((t) => t.length === usersPerTeam);
     if (allFilled) return { teams, partiesUsed };
     if (!placed) continue;
   }
@@ -42,4 +42,3 @@ export function packTeamsGreedy(
   // Not able to exactly fill all teams
   return null;
 }
-

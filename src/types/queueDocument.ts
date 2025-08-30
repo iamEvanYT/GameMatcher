@@ -1,11 +1,11 @@
 export interface QueueDocument {
-    _id: string,            // Party ID
-    userIds: number[],
-    queueId: string,
-    timeAdded: Date,
+  _id: string; // Party ID
+  userIds: number[];
+  queueId: string;
+  timeAdded: Date;
 
-    // ranked specific
-    rankedValue?: number,
-    rankedMax?: number,
-    rankedMin?: number,
+  // ranked specific
+  rankedValue?: number;
+  rankedMax?: number;
+  rankedMin?: number;
 }

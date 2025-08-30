@@ -11,4 +11,3 @@ export type Services = {
   now: () => Date;
   log?: (message: string, meta?: Record<string, unknown>) => void;
 };
-

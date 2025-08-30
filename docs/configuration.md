@@ -66,8 +66,8 @@ export const queues: QueueConfigs = [
     teamsPerMatch: 2,
     discoverMatchesInterval: 5,
     searchRange: [0, 0],
-    incrementRange: [1, 1],
-  },
+    incrementRange: [1, 1]
+  }
 ] as const;
 ```
 
