@@ -6,34 +6,34 @@ export type ContextWithParsedBody<Schema extends ZodTypeAny = ZodTypeAny> = Cont
 };
 
 type JSONBodyParserOptions<T extends ZodTypeAny> = {
-    schema?: T;
-}
+  schema?: T;
+};
 
 export function parseJSONBody<T extends ZodTypeAny>({ schema }: JSONBodyParserOptions<T>): MiddlewareHandler {
-    return async (c: Context, next: Next) => {
-        var failedToParse = false
-        const jsonBody = await c.req.json().catch(() => {
-            failedToParse = true;
-        });
+  return async (c: Context, next: Next) => {
+    var failedToParse = false;
+    const jsonBody = await c.req.json().catch(() => {
+      failedToParse = true;
+    });
 
-        if (failedToParse) {
-            return c.json({ error: "FailedToParseBody" }, 400);
-        }
+    if (failedToParse) {
+      return c.json({ error: "FailedToParseBody" }, 400);
+    }
 
-        const ctx = c as ContextWithParsedBody<T>;
+    const ctx = c as ContextWithParsedBody<T>;
 
-        if (schema) {
-            const parseResult = schema.safeParse(jsonBody);
-            if (!parseResult.success) {
-                return c.json({ error: parseResult.error.errors }, 400);
-            }
+    if (schema) {
+      const parseResult = schema.safeParse(jsonBody);
+      if (!parseResult.success) {
+        return c.json({ error: parseResult.error.errors }, 400);
+      }
 
-            ctx.bodyData = parseResult.data;
-        } else {
-            ctx.bodyData = jsonBody;
-        }
+      ctx.bodyData = parseResult.data;
+    } else {
+      ctx.bodyData = jsonBody;
+    }
 
-        await next();
-        return;
-    };
+    await next();
+    return;
+  };
 }
